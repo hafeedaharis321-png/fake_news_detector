@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fake News Detector</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+font-family: 'Segoe UI', Arial, sans-serif;
+background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+min-height: 100vh;
+color: #fff;
+padding: 30px 15px;
+}
+h1 { text-align: center; font-size: 2.2em; margin-bottom: 6px; color: #e94560; }
+.subtitle { text-align: center; color: #aaa; margin-bottom: 28px; }
+.card {
+background: rgba(255,255,255,0.07);
+border: 1px solid rgba(255,255,255,0.12);
+border-radius: 16px;
+padding: 26px;
+max-width: 720px;
+margin: 0 auto 22px;
+}
+label { display: block; margin-bottom: 6px; color: #ccc; font-size: 0.9em; }
+input, textarea {
+width: 100%; padding: 12px 14px;
+background: rgba(255,255,255,0.09);
+border: 1px solid rgba(255,255,255,0.15);
+border-radius: 10px; color: #fff; font-size: 1em;
+margin-bottom: 16px; outline: none;
+}
+input:focus, textarea:focus { border-color: #e94560; }
+textarea { height: 130px; resize: vertical; }
+button {
+width: 100%; padding: 14px;
+background: linear-gradient(90deg, #e94560, #c23152);
+color: #fff; border: none; border-radius: 10px;
+font-size: 1.1em; font-weight: bold; cursor: pointer;
+}
+button:hover { opacity: 0.88; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+#result { display: none; max-width: 720px; margin: 0 auto; }
+.verdict-box {
+text-align: center; padding: 22px; border-radius: 16px;
+margin-bottom: 18px; font-size: 1.6em; font-weight: bold;
+}
+.FAKE { background: rgba(233,69,96,0.2); border: 2px solid #e94560; color: #e94560; }
+.REAL { background: rgba(76,175,80,0.2); border: 2px solid #4CAF50; color: #4CAF50; }
+.votes-row { display: flex; justify-content: center; gap: 24px; margin-bottom: 18px; }
+.vote-chip { padding: 8px 22px; border-radius: 20px; font-weight: bold; }
+.vote-chip.fake { background: rgba(233,69,96,0.2); border: 1px solid #e94560; color: #e94560; }
+.vote-chip.real { background: rgba(76,175,80,0.2); border: 1px solid #4CAF50; color: #4CAF50; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.model-card {
+background: rgba(255,255,255,0.07);
+border: 1px solid rgba(255,255,255,0.1);
+border-radius: 12px; padding: 16px; text-align: center;
+}
+.model-name { font-size: 0.82em; color: #aaa; margin-bottom: 8px; }
+.model-label { font-size: 1.3em; font-weight: bold; margin-bottom: 6px; }
+.model-label.FAKE { color: #e94560; }
+.model-label.REAL { color: #4CAF50; }
+.bar-bg { background: rgba(255,255,255,0.1); border-radius: 20px; height: 8px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 20px; }
+.bar-fill.FAKE { background: #e94560; }
+.bar-fill.REAL { background: #4CAF50; }
+.conf-text { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+.charts-section { max-width: 720px; margin: 0 auto 30px; }
+.charts-section img {
+width: 100%; border-radius: 12px;
+border: 1px solid rgba(255,255,255,0.1); margin-bottom: 14px;
+}
+.loading { text-align: center; padding: 16px; color: #aaa; display: none; }
+</style>
+</head>
+<body>
+<h1>🔍 Fake News Detector</h1>
+<p class="subtitle">4 Machine Learning Models | BCA Final Year Project</p>
+<div class="card">
+<label>📰 News Title</label>
+<input type="text" id="title" placeholder="Enter news headline here...">
+<label>📝 News Content</label>
+<textarea id="text" placeholder="Paste the full news article text here..."></textarea>
+<button onclick="analyze()" id="btn">🔎 Detect Fake or Real</button>
+</div>
+<div class="loading" id="loading">⏳ Analyzing with 4 ML models...</div>
+<div id="result">
+<div class="verdict-box" id="verdict"></div>
+<div class="card">
+<div class="votes-row" id="votes"></div>
+<div class="grid" id="model-grid"></div>
+</div>
+</div>
+<div class="charts-section">
+<div class="card">
+<h3 style="margin-bottom:14px; color:#ccc;">📊 Model Training Results</h3>
+<img src="/static/accuracy_comparison.png" onerror="this.style.display='none'" alt="Accuracy">
+<img src="/static/comparison_chart.png" onerror="this.style.display='none'" alt="Metrics">
+<img src="/static/confusion_matrices.png" onerror="this.style.display='none'" alt="Confusion">
+</div>
+</div>
+<script>
+async function analyze() {
+const title = document.getElementById('title').value.trim();
+const text = document.getElementById('text').value.trim();
+if (!title && !text) { alert('Please enter news title or text!'); return; }
+document.getElementById('btn').disabled = true;
+document.getElementById('loading').style.display = 'block';
+document.getElementById('result').style.display = 'none';
+try {
+const res = await fetch('/predict', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ title, text })
+});
+const data = await res.json();
+if (data.error) { alert(data.error); return; }
+const verdict = document.getElementById('verdict');
+verdict.className = 'verdict-box ' + data.overall;
+verdict.innerHTML = data.overall === 'FAKE'
+? `🚨 FAKE NEWS DETECTED (${data.votes_fake} of ${data.total_models} models agree)`
+: `✅ REAL NEWS (${data.votes_real} of ${data.total_models} models agree)`;
+document.getElementById('votes').innerHTML = `
+<div class="vote-chip real">✅ Real: ${data.votes_real}</div>
+<div class="vote-chip fake">🚨 Fake: ${data.votes_fake}</div>`;
+const grid = document.getElementById('model-grid');
+grid.innerHTML = '';
+for (const [name, info] of Object.entries(data.predictions)) {
+const conf = info.confidence !== null ? info.confidence : 50;
+grid.innerHTML += `
+<div class="model-card">
+<div class="model-name">${name}</div>
+<div class="model-label ${info.label}">${info.label === 'FAKE' ? '🚨' : '✅'} ${info.label}</div>
+<div class="bar-bg"><div class="bar-fill ${info.label}" style="width:${conf}%"></div></div>
+<div class="conf-text">${info.confidence !== null ? 'Confidence: ' + info.confidence + '%' : ''}</div>
+</div>`;
+}
+document.getElementById('result').style.display = 'block';
+} catch(e) {
+alert('Error: ' + e.message);
+} finally {
+document.getElementById('btn').disabled = false;
+document.getElementById('loading').style.display = 'none';
+}
+}
+</script>
+</body>
+</html>
